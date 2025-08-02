@@ -139,6 +139,11 @@ training_data_*.csv
 training_log.txt
 *.log
 
+# User data and preferences (should be in system user data directory)
+last_model.txt
+user_preferences.json
+*.user
+
 # Generated plots and images
 *.png
 *.jpg
