@@ -19,13 +19,14 @@ class DQN(nn.Module):
         return x
 
 class SnakeAI:
-    def __init__(self, input_size, output_size, target_update_freq=1000):
+    def __init__(self, input_size, output_size, learning_rate=0.001, target_update_freq=1000):
+        self.learning_rate = learning_rate  # Store learning rate as attribute
         self.model = DQN(input_size, output_size)
         self.target_model = DQN(input_size, output_size)
         self.target_model.load_state_dict(self.model.state_dict())
         self.target_model.eval()
         
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
         self.criterion = nn.MSELoss()
         self.memory = deque(maxlen=10_000)
         self.gamma = 0.99  # Discount factor
@@ -66,6 +67,12 @@ class SnakeAI:
     def get_action(self, state, epsilon, device):
         if np.random.rand() <= epsilon:
             return np.random.choice([0, 1, 2])  # Random action
-        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(device)
-        q_values = self.model(state_tensor)
-        return torch.argmax(q_values).item()
+        
+        # Use the model to predict the best action
+        self.model.eval()  # Ensure model is in eval mode
+        with torch.no_grad():  # Disable gradients for inference
+            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(device)
+            q_values = self.model(state_tensor)
+            action = torch.argmax(q_values).item()
+        
+        return action

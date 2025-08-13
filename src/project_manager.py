@@ -216,8 +216,7 @@ class ProjectManager:
     
     def __init__(self):
         """Initialize the project manager."""
-        self.projects_root = Path(get_user_data_dir()) / "projects"
-        self.projects_root.mkdir(parents=True, exist_ok=True)
+        self.projects_root = Path.home() / "Documents"
     
     def create_new_project(self, project_name, description=""):
         """Create a new project."""

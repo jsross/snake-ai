@@ -1,6 +1,12 @@
+# Snake AI Project Dependencies
+# Core ML and game development packages
+
 torch
 pygame
 numpy
 matplotlib
 gym
 pandas
+
+# For security scanning, also install:
+# pip install -r requirements-security.txt
