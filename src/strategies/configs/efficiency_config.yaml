@@ -1,0 +1,21 @@
+# Efficiency Strategy Configuration
+# Focus on quick and efficient food collection
+
+reward_weights:
+  wall_collision_penalty: -50.0     # Standard wall penalty
+  self_collision_penalty: -60.0     # Standard self-collision penalty
+  food_reward: 200.0                # Double food reward for efficiency
+  closer_reward: 1.0                # Strong guidance (2x)
+  farther_penalty: -0.2             # Strong penalty for inefficiency (2x)
+  survival_reward: 0.1              # Standard survival bonus
+  move_cost: -0.01                  # Standard move cost
+  no_score_penalty: -20.0           # Standard no score penalty
+
+# Strategy-specific parameters
+strategy_params:
+  exploration_multiplier: 0.5       # Reduced exploration for efficiency
+  max_steps_multiplier: 0.8         # 20% shorter episodes for efficiency
+  activation_threshold:
+    min_episode: 5000               # Activate after 5000 episodes
+    min_avg_score: 5.0              # Require avg score >= 5.0
+    min_survival_rate: 0.9          # Require 90% survival rate

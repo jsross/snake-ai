@@ -32,25 +32,6 @@ def get_user_data_dir():
     # Ultimate fallback
     return os.path.join(home, '.snake_ai')
 
-def preprocess_state(state):
-    # Convert the game state into a format suitable for the AI model
-    return state.flatten()  # Example: flattening the state for input
-
-def visualize_game(state, score):
-    # Function to visualize the game state (optional)
-    pass  # Implementation for visualization can be added here
-
-def log_training_data(data):
-    # Function to log training data for analysis
-    with open('training_log.txt', 'a') as f:
-        f.write(f"{data}\n")  # Append data to a log file
-
-def save_model(model, filename):
-    # Function to save the trained model (legacy - creates simple model file)
-    os.makedirs(os.path.dirname(filename), exist_ok=True) if os.path.dirname(filename) else None
-    torch.save(model.state_dict(), filename)
-    print(f"Model saved to {filename}")
-
 def save_unified_model(model, optimizer, filepath, episode=0, score=0, total_reward=0.0, training_data=None, description=""):
     """Save model using the unified container system."""
     container = SnakeModelContainer()

@@ -1,4 +1,5 @@
 import pygame
+from pygame.locals import *
 import sys
 
 # Menu mode constants
@@ -89,7 +90,8 @@ def choose_mode_pygame(display, font, game, current_model_info=None):
                     
                     iterations = None
                     if selected_key == TRAINING_MODE:
-                        iterations = get_training_iterations(display, font, game)
+                        # Don't ask for iterations here - handled in main flow with strategy selection
+                        iterations = None
                     elif selected_key == QUIT:
                         pygame.quit()
                         sys.exit()
@@ -130,3 +132,209 @@ def get_training_iterations(display, font, game):
                 elif event.unicode.isdigit():
                     iterations += event.unicode
     return int(iterations)
+
+
+def choose_training_strategy(display, font, game):
+    """
+    Display a menu for selecting training strategy.
+    
+    Args:
+        display: Pygame display surface
+        font: Pygame font object
+        game: SnakeGame instance for getting window dimensions
+        
+    Returns:
+        str: Selected strategy name ('auto', 'survival', 'food_seeking', 'advanced')
+    """
+    strategies = {
+        'auto': 'Auto (Curriculum Learning)',
+        'survival': 'Survival Strategy',
+        'food_seeking': 'Food Seeking Strategy', 
+        'advanced': 'Advanced Strategy'
+    }
+    
+    strategy_keys = list(strategies.keys())
+    selected_index = 0
+
+    while True:
+        display.fill((0, 0, 0))
+        
+        # Title
+        title_text = font.render("Select Training Strategy", True, (255, 255, 255))
+        title_rect = title_text.get_rect(center=(game.w // 2, 50))
+        display.blit(title_text, title_rect)
+        
+        # Strategy options
+        for i, (_, description) in enumerate(strategies.items()):
+            color = (255, 255, 0) if i == selected_index else (255, 255, 255)
+            option_text = font.render(f"{i + 1}. {description}", True, color)
+            option_rect = option_text.get_rect(center=(game.w // 2, 150 + i * 50))
+            display.blit(option_text, option_rect)
+        
+        # Instructions
+        instructions = [
+            "Use UP/DOWN arrows to navigate",
+            "Press ENTER to select",
+            "Press ESC to go back"
+        ]
+        
+        for i, instruction in enumerate(instructions):
+            inst_text = font.render(instruction, True, (128, 128, 128))
+            inst_rect = inst_text.get_rect(center=(game.w // 2, 400 + i * 30))
+            display.blit(inst_text, inst_rect)
+        
+        pygame.display.flip()
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_UP:
+                    selected_index = (selected_index - 1) % len(strategy_keys)
+                elif event.key == pygame.K_DOWN:
+                    selected_index = (selected_index + 1) % len(strategy_keys)
+                elif event.key == pygame.K_RETURN:
+                    return strategy_keys[selected_index]
+                elif event.key == pygame.K_ESCAPE:
+                    return None  # User cancelled
+                elif event.key == pygame.K_1:
+                    return 'auto'
+                elif event.key == pygame.K_2:
+                    return 'survival'
+                elif event.key == pygame.K_3:
+                    return 'food_seeking'
+                elif event.key == pygame.K_4:
+                    return 'advanced'
+
+
+def configure_strategy_weights(display, font, game, strategy_name):
+    """
+    Allow user to configure reward weights for a strategy.
+    
+    Args:
+        display: Pygame display surface
+        font: Pygame font object
+        game: SnakeGame instance for getting window dimensions
+        strategy_name: Name of the strategy to configure
+        
+    Returns:
+        dict: Updated reward weights or None if cancelled
+    """
+    if strategy_name == 'auto':
+        return None  # Auto mode uses default weights
+    
+    # Import strategy classes to get default weights
+    try:
+        from .strategies.survival_strategy import SurvivalTrainingStrategy
+        from .strategies.food_seeking_strategy import FoodSeekingTrainingStrategy
+        from .strategies.advanced_strategy import AdvancedTrainingStrategy
+    except ImportError:
+        from strategies.survival_strategy import SurvivalTrainingStrategy
+        from strategies.food_seeking_strategy import FoodSeekingTrainingStrategy
+        from strategies.advanced_strategy import AdvancedTrainingStrategy
+    
+    strategy_classes = {
+        'survival': SurvivalTrainingStrategy,
+        'food_seeking': FoodSeekingTrainingStrategy,
+        'advanced': AdvancedTrainingStrategy
+    }
+    
+    if strategy_name not in strategy_classes:
+        return None
+        
+    # Get current weights from strategy
+    strategy = strategy_classes[strategy_name]()
+    current_weights = strategy.get_reward_weights()
+    
+    # Define which weights are configurable for each strategy
+    configurable_weights = {
+        'survival': ['wall_collision_penalty', 'self_collision_penalty', 'survival_reward'],
+        'food_seeking': ['wall_collision_penalty', 'self_collision_penalty', 'food_reward', 'closer_reward', 'farther_penalty'],
+        'advanced': ['wall_collision_penalty', 'self_collision_penalty', 'food_reward', 'closer_reward', 'farther_penalty', 'move_cost']
+    }
+    
+    weights_to_configure = configurable_weights.get(strategy_name, [])
+    selected_weight = 0
+    editing_value = False
+    current_input = ""
+    
+    # Create a working copy of weights
+    updated_weights = current_weights.copy()
+    
+    while True:
+        display.fill((0, 0, 0))
+        
+        # Title
+        title_text = font.render(f"Configure {strategy_name.replace('_', ' ').title()} Strategy Weights", True, (255, 255, 255))
+        title_rect = title_text.get_rect(center=(game.w // 2, 30))
+        display.blit(title_text, title_rect)
+        
+        # Weight configuration
+        y_offset = 80
+        for i, weight_name in enumerate(weights_to_configure):
+            color = (255, 255, 0) if i == selected_weight and not editing_value else (255, 255, 255)
+            if editing_value and i == selected_weight:
+                color = (0, 255, 0)
+                display_value = current_input if current_input else str(updated_weights[weight_name])
+            else:
+                display_value = str(updated_weights[weight_name])
+                
+            weight_text = font.render(f"{weight_name.replace('_', ' ').title()}: {display_value}", True, color)
+            weight_rect = weight_text.get_rect(center=(game.w // 2, y_offset + i * 35))
+            display.blit(weight_text, weight_rect)
+        
+        # Instructions
+        instructions = [
+            "UP/DOWN: Navigate weights",
+            "ENTER: Edit selected weight" if not editing_value else "ENTER: Confirm value",
+            "ESC: Cancel" if not editing_value else "ESC: Cancel edit",
+            "S: Save and continue",
+            "R: Reset to defaults"
+        ]
+        
+        inst_y = y_offset + len(weights_to_configure) * 35 + 40
+        for i, instruction in enumerate(instructions):
+            inst_text = font.render(instruction, True, (128, 128, 128))
+            inst_rect = inst_text.get_rect(center=(game.w // 2, inst_y + i * 25))
+            display.blit(inst_text, inst_rect)
+        
+        pygame.display.flip()
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if editing_value:
+                    if event.key == pygame.K_RETURN and current_input:
+                        try:
+                            updated_weights[weights_to_configure[selected_weight]] = float(current_input)
+                            editing_value = False
+                            current_input = ""
+                        except ValueError:
+                            current_input = ""  # Invalid input, clear
+                    elif event.key == pygame.K_ESCAPE:
+                        editing_value = False
+                        current_input = ""
+                    elif event.key == pygame.K_BACKSPACE:
+                        current_input = current_input[:-1]
+                    elif event.key == pygame.K_MINUS:
+                        current_input += "-"
+                    elif event.unicode.replace('.', '').replace('-', '').isdigit() or event.unicode == '.':
+                        current_input += event.unicode
+                else:
+                    if event.key == pygame.K_UP:
+                        selected_weight = (selected_weight - 1) % len(weights_to_configure)
+                    elif event.key == pygame.K_DOWN:
+                        selected_weight = (selected_weight + 1) % len(weights_to_configure)
+                    elif event.key == pygame.K_RETURN:
+                        editing_value = True
+                        current_input = str(updated_weights[weights_to_configure[selected_weight]])
+                    elif event.key == pygame.K_ESCAPE:
+                        return None  # User cancelled
+                    elif event.key == pygame.K_s:
+                        return updated_weights  # Save and continue
+                    elif event.key == pygame.K_r:
+                        # Reset to defaults
+                        updated_weights = current_weights.copy()

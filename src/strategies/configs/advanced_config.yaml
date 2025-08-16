@@ -1,0 +1,21 @@
+# Advanced Strategy Configuration
+# Optimize for high scores and efficient play
+
+reward_weights:
+  wall_collision_penalty: -50.0     # Standard wall penalty
+  self_collision_penalty: -60.0     # Standard self-collision penalty
+  food_reward: 150.0                # Enhanced food reward (1.5x)
+  closer_reward: 0.75               # Strong distance guidance (1.5x)
+  farther_penalty: -0.12            # Enhanced farther penalty (1.2x)
+  survival_reward: 0.1              # Standard survival bonus
+  move_cost: -0.01                  # Standard move cost
+  no_score_penalty: -20.0           # Standard no score penalty
+
+# Strategy-specific parameters
+strategy_params:
+  exploration_multiplier: 0.8       # Reduced exploration for exploitation
+  max_steps_multiplier: 1.0         # Standard episode length
+  activation_threshold:
+    min_episode: 2000               # Activate after 2000 episodes
+    min_survival_rate: 0.8          # Require 80% survival rate
+    min_avg_score: 3.0              # Require avg score >= 3.0

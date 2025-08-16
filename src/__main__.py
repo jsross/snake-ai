@@ -1,7 +1,7 @@
-import math
 import os
 import sys
 import time
+import yaml
 import torch
 import pygame
 import numpy as np
@@ -11,23 +11,48 @@ from pygame.locals import *
 try:
     from .snake_game import SnakeGame, Action
     from .snake_ai import SnakeAI
-    from .snake_game_renderer import render
-    from .menu import choose_mode_pygame, CREATE_NEW_MODEL, AI_DEMO, MANUAL_MODE, TRAINING_MODE, LOAD_MODEL_INTERACTIVE, RESUME
+    from .snake_game_renderer import render, render_training_progress, render_training_complete
+    from .menu import choose_mode_pygame, choose_training_strategy, configure_strategy_weights, get_training_iterations, CREATE_NEW_MODEL, AI_DEMO, MANUAL_MODE, TRAINING_MODE, LOAD_MODEL_INTERACTIVE, RESUME
     from .utils import load_checkpoint, save_unified_model, load_unified_model
     from .model_container import SnakeModelContainer
     from .project_manager import SnakeAIProject, ProjectManager, interactive_project_selection
+    from .training_framework import TrainingFramework, TrainingContext, TrainingStats
+    from .strategy_analytics import strategy_tracker
 except ImportError:
     # Fallback to absolute imports when run directly
     from snake_game import SnakeGame, Action
     from snake_ai import SnakeAI
-    from snake_game_renderer import render
-    from menu import choose_mode_pygame, CREATE_NEW_MODEL, AI_DEMO, MANUAL_MODE, TRAINING_MODE, LOAD_MODEL_INTERACTIVE, RESUME
+    from snake_game_renderer import render, render_training_progress, render_training_complete
+    from menu import choose_mode_pygame, choose_training_strategy, configure_strategy_weights, get_training_iterations, CREATE_NEW_MODEL, AI_DEMO, MANUAL_MODE, TRAINING_MODE, LOAD_MODEL_INTERACTIVE, RESUME
     from utils import load_checkpoint, save_unified_model, load_unified_model
     from model_container import SnakeModelContainer
     from project_manager import SnakeAIProject, ProjectManager, interactive_project_selection
+    from training_framework import TrainingFramework, TrainingContext, TrainingStats
+    from strategy_analytics import strategy_tracker
 
 pygame.init()
 game = SnakeGame(initial_snake_length=8)  # Start with a longer snake
+
+# Load configuration from YAML file
+def load_config():
+    """Load configuration from config.yaml file"""
+    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config.yaml')
+    
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"Configuration file not found at {config_path}. Please ensure config.yaml exists.")
+    
+    try:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        print(f"Loaded configuration from {config_path}")
+        return config
+    except yaml.YAMLError as e:
+        raise ValueError(f"Error parsing YAML configuration file: {e}")
+    except IOError as e:
+        raise IOError(f"Error reading configuration file: {e}")
+
+# Load configuration
+CONFIG = load_config()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
@@ -55,7 +80,7 @@ average_rewards = []
 training_log = []  # Store training data for CSV export
 
 # Plot control
-ENABLE_LIVE_PLOTTING = False  # Set to True to enable live plotting during training (may cause crashes)
+ENABLE_LIVE_PLOTTING = CONFIG['ui_config']['enable_live_plotting']
 
 # Checkpointing variables
 best_reward = float('-inf')  # Use reward instead of score for better model selection
@@ -74,52 +99,60 @@ current_model_info = {
 best_model_path = None
 checkpoint_path = None
 models_dir = None
-checkpoint_frequency = 500  # Save checkpoint every N episodes
+checkpoint_frequency = CONFIG['training_config']['checkpoint_frequency']
 
 resume_requested = False
 
-# Reward weights - More stable reward structure
-WALL_COLLISION_PENALTY = -50.0  # Strong penalty for dying
-SELF_COLLISION_PENALTY = -50.0  # Strong penalty for self-collision
-FOOD_REWARD = 100.0  # High reward for food
-CLOSER_REWARD = 0.05  # Very small reward for moving toward food
-FARTHER_PENALTY = -0.05  # Very small penalty for moving away
-SURVIVAL_REWARD = 0.01  # Small survival reward
-STEP_PENALTY = -0.01  # Very small step penalty
+# Initialize Training Framework
+training_framework = TrainingFramework()
+
+# Reward weights are now handled entirely by individual strategies
+# No default weights needed in main system
 
 # Episode step control
-BASE_MAX_STEPS = 500  # Much longer episodes for more learning
-EXTRA_STEPS_PER_FOOD = 200
+BASE_MAX_STEPS = CONFIG['game_config']['base_max_steps']
+EXTRA_STEPS_PER_FOOD = CONFIG['game_config']['extra_steps_per_food']
 
-def calculate_reward(state, next_state, wall_collision, self_collision, ate_food):
-    """Calculate reward with improved structure to prevent spinning"""
+def create_training_context(episode, recent_stats):
+    """Create training context for the framework"""
+    # Extract stats with defaults
+    avg_score = recent_stats.get('avg_score', 0.0) if recent_stats else 0.0
+    survival_rate = recent_stats.get('survival_rate', 0.0) if recent_stats else 0.0
+    avg_reward = recent_stats.get('avg_reward', 0.0) if recent_stats else 0.0
     
-    # Death penalties - strong negative signal
-    if wall_collision or self_collision:
-        return WALL_COLLISION_PENALTY
+    stats = TrainingStats(
+        episode=episode,
+        avg_score=avg_score,
+        survival_rate=survival_rate,
+        avg_reward=avg_reward
+    )
     
-    # Food reward - strong positive signal
-    if ate_food:
-        return FOOD_REWARD
-
-    # Base survival reward
-    reward = SURVIVAL_REWARD + STEP_PENALTY
+    context = TrainingContext(
+        episode=episode,
+        stats=stats,
+        reward_weights={},  # Strategies handle their own weights now
+        config=CONFIG
+    )
     
-    # Distance-based guidance (much smaller to prevent spinning)
-    head_pos = np.argwhere(state == 1)[0]
-    next_head_pos = np.argwhere(next_state == 1)[0]
-    food_pos = np.argwhere(state < 0)[0]
-    prev_distance = np.linalg.norm(head_pos - food_pos)
-    new_distance = np.linalg.norm(next_head_pos - food_pos)
+    return context
 
-    if new_distance < prev_distance:
-        reward += CLOSER_REWARD
-    elif new_distance > prev_distance:
-        reward += FARTHER_PENALTY
-
+def calculate_reward(state, next_state, wall_collision, self_collision, ate_food, episode=0, recent_stats=None):
+    """Calculate reward using the training framework"""
+    context = create_training_context(episode, recent_stats)
+    reward, active_strategy = training_framework.calculate_reward(
+        state, next_state, wall_collision, self_collision, ate_food, context
+    )
+    
+    # Store active strategy info for display
+    global current_training_strategy
+    current_training_strategy = active_strategy
+    
     return reward
 
-def run_episode(mode, epsilon, train=False):
+# Global variable to track current strategy for display
+current_training_strategy = None
+
+def run_episode(mode, epsilon, train=False, episode_num=0, recent_stats=None):
     state = game.reset()
     done = False
     steps = 0
@@ -150,7 +183,7 @@ def run_episode(mode, epsilon, train=False):
         
         max_steps = BASE_MAX_STEPS + game.score * EXTRA_STEPS_PER_FOOD
 
-        reward = calculate_reward(state, next_state, wall_collision, self_collision, ate_food)
+        reward = calculate_reward(state, next_state, wall_collision, self_collision, ate_food, episode_num, recent_stats)
         
         # Anti-spinning penalty: penalize if too many turns in recent actions
         if mode == "training" and len(recent_actions) >= 6:
@@ -196,6 +229,8 @@ def run_episode(mode, epsilon, train=False):
         total_actions = len(debug_actions)
         print(f"Action distribution: Straight {action_counts[0]/total_actions*100:.1f}%, Left {action_counts[1]/total_actions*100:.1f}%, Right {action_counts[2]/total_actions*100:.1f}%")
 
+    # All reward calculation is now handled by the strategy system - no external modifications
+
     return game.score, steps, total_reward, False
 
 def create_new_project():
@@ -232,8 +267,11 @@ def create_new_project():
         # Use the selected path as project directory (remove any extension)
         project_path = os.path.splitext(project_file)[0]
         
-        # Create the project
+        # Create the project with strategy-specific reward weights
         current_project = SnakeAIProject(project_path)
+        
+        # Strategies now handle their own reward weights
+        # Projects store strategy configs instead of global reward weights
         
         if current_project.create_project():
             # Set up paths
@@ -265,6 +303,11 @@ def create_new_project():
             
             print("✓ AI model reset to random weights")
             print("✓ Training history cleared")
+            print("✓ Reward weights configured with current defaults")
+            
+            # Save strategy configurations to project
+            if current_project.save_strategy_configs(training_framework):
+                print("✓ Strategy configurations saved to project")
             
             # Update model info
             current_model_info = {
@@ -357,14 +400,16 @@ def load_existing_project():
         return False
 
 # === MAIN LOOP ===
-epsilon_start = 1.0
-epsilon_end = 0.01  # Lower minimum epsilon for more exploitation
-epsilon_decay_steps = 5000  # Decay over specific number of steps instead of episodes
+epsilon_start = CONFIG['training_config']['epsilon_start']
+epsilon_end = CONFIG['training_config']['epsilon_end']
+epsilon_decay_steps = CONFIG['training_config']['epsilon_decay_steps']
 last_mode = None
 
 while True:
     if not resume_requested:
         mode, training_iterations = choose_mode_pygame(display, font, game, current_model_info)
+        
+        # Handle special modes first
         if mode == RESUME:
             mode = last_mode
         elif mode == CREATE_NEW_MODEL:
@@ -379,6 +424,32 @@ while True:
             else:
                 print("Project loading cancelled.")
             continue  # Go back to menu
+        
+        # Handle training mode with strategy selection
+        elif mode == TRAINING_MODE:
+            # Select training strategy first
+            strategy_choice = choose_training_strategy(display, font, game)
+            if strategy_choice is None:
+                # User cancelled strategy selection, go back to menu
+                continue
+                
+            # Configure strategy weights if not auto mode
+            custom_weights = None
+            if strategy_choice != 'auto':
+                custom_weights = configure_strategy_weights(display, font, game, strategy_choice)
+                if custom_weights is None:
+                    # User cancelled weight configuration, go back to menu
+                    continue
+            
+            # Get training iterations
+            training_iterations = get_training_iterations(display, font, game)
+            
+            print(f"Training configuration:")
+            print(f"  Strategy: {strategy_choice}")
+            if custom_weights:
+                print(f"  Custom weights: {len(custom_weights)} weights configured")
+            print(f"  Iterations: {training_iterations}")
+        
         else:
             last_mode = mode
 
@@ -390,10 +461,65 @@ while True:
         continue
 
     if mode == TRAINING_MODE:
+        # Configure the training framework with selected strategy
+        training_framework.set_strategy(strategy_choice)
+        
+        # Apply custom weights if configured
+        if custom_weights:
+            # Update the strategy with custom weights
+            active_strategy = training_framework.get_active_strategy(
+                TrainingContext(episode, TrainingStats(episode, 0.0, 0.0, 0.0), {}, {})
+            )
+            # Save custom weights to strategy config temporarily
+            active_strategy._custom_weights = custom_weights
+            print(f"Applied custom weights to {strategy_choice} strategy")
+        
         training_start_time = time.time()  # Track total training time
         training_session_episodes = 0  # Track episodes in this session
+        
+        print(f"\nStarting training: {training_iterations} episodes")
+        print("Press Ctrl+C to stop training early")
+        
+        # Progress tracking
+        last_progress_update = 0
+        progress_update_interval = max(1, training_iterations // 50)  # Update 50 times during training
+        print(f"Progress bar will update every {progress_update_interval} episodes")
 
         for i in range(training_iterations):
+            # Show progress bar
+            if i % progress_update_interval == 0 or i == training_iterations - 1:
+                progress = (i + 1) / training_iterations
+                bar_length = 40
+                filled_length = int(bar_length * progress)
+                bar = '█' * filled_length + '░' * (bar_length - filled_length)
+                
+                # Calculate ETA
+                elapsed_time = time.time() - training_start_time
+                if i > 0:
+                    avg_time_per_episode = elapsed_time / (i + 1)
+                    remaining_episodes = training_iterations - (i + 1)
+                    eta_seconds = avg_time_per_episode * remaining_episodes
+                    eta_mins = int(eta_seconds // 60)
+                    eta_secs = int(eta_seconds % 60)
+                    eta_str = f"ETA: {eta_mins:02d}:{eta_secs:02d}"
+                else:
+                    eta_str = "ETA: --:--"
+                
+                # Print progress bar (overwrite previous line)
+                print(f"\rProgress: |{bar}| {progress*100:.1f}% ({i+1}/{training_iterations}) {eta_str}", end='', flush=True)
+                
+                # Show pygame progress bar
+                current_score = episode_scores[-1] if episode_scores else 0
+                best_score = max(episode_scores) if episode_scores else 0
+                strategy_name = strategy_choice if 'strategy_choice' in locals() else 'Unknown Strategy'
+                render_training_progress(display, font, i + 1, training_iterations, current_score, best_score, strategy_name, eta_str)
+                
+                # Process pygame events to keep window responsive
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        pygame.quit()
+                        sys.exit()
+            
             # Better epsilon decay - more gradual and longer exploration
             current_step = episode + i  # Use total step count across all training
             if current_step < epsilon_decay_steps:
@@ -402,7 +528,21 @@ while True:
                 epsilon = epsilon_end
                 
             start_time = time.time()
-            score, steps, total_reward, _ = run_episode(mode, epsilon=epsilon, train=True)
+            
+            # Calculate recent stats for curriculum learning
+            recent_stats = {}
+            if len(episode_scores) >= 100:
+                recent_stats['avg_score'] = np.mean(episode_scores[-100:])
+                # Calculate survival rate (episodes that got at least 1 food vs total)
+                recent_survival = sum(1 for s in episode_scores[-100:] if s >= 1)
+                recent_stats['survival_rate'] = recent_survival / 100.0
+            else:
+                recent_stats['avg_score'] = np.mean(episode_scores) if episode_scores else 0.0
+                recent_survival = sum(1 for s in episode_scores if s >= 1)
+                recent_stats['survival_rate'] = recent_survival / len(episode_scores) if episode_scores else 0.0
+            
+            score, steps, total_reward, _ = run_episode(mode, epsilon=epsilon, train=True, 
+                                                       episode_num=episode, recent_stats=recent_stats)
             
             # Single additional training step at end of episode for stability
             if len(ai_model.memory) > 128:
@@ -416,6 +556,20 @@ while True:
             average_rewards.append(np.mean(episode_rewards[-100:]))
             
             # Log training data for analysis
+            context = create_training_context(episode, recent_stats)
+            active_strategy = training_framework.get_active_strategy(context)
+            stage_name = active_strategy.get_stage_name()
+            
+            # Track strategy usage and performance
+            strategy_tracker.record_episode(
+                episode=episode,
+                strategy_name=active_strategy.name,
+                score=score,
+                reward=total_reward,
+                steps=steps,
+                survived=(score > 0)  # Consider episode survived if any food was eaten
+            )
+            
             training_log.append({
                 'episode': episode,
                 'score': score,
@@ -424,7 +578,9 @@ while True:
                 'epsilon': epsilon,
                 'duration': time.time() - start_time,
                 'avg_score_100': average_scores[-1],
-                'avg_reward_100': average_rewards[-1]
+                'avg_reward_100': average_rewards[-1],
+                'learning_stage': active_strategy.name,
+                'survival_rate': recent_stats['survival_rate']
             })
 
             # Save unified model if reward improved
@@ -501,7 +657,58 @@ while True:
                     print(f"Plot update failed: {e}")
                     # Continue without crashing
 
-            print(f"Episode: {episode}, Epsilon: {epsilon:.3f}, Score: {score}, Steps: {steps}, Total Reward: {total_reward:.2f}, Duration: {time.time() - start_time:.2f}s")
+            # Determine and display learning stage using framework
+            context = create_training_context(episode, recent_stats)
+            active_strategy = training_framework.get_active_strategy(context)
+            stage_name = active_strategy.get_stage_name()
+            
+            print(f"Episode: {episode}, Stage: {stage_name}, Epsilon: {epsilon:.3f}, Score: {score}, Steps: {steps}, Total Reward: {total_reward:.2f}, Duration: {time.time() - start_time:.2f}s")
+            
+            # Show strategy analytics summary every 1000 episodes
+            if episode % 1000 == 0 and episode > 0:
+                print(f"\n--- Strategy Analytics at Episode {episode} ---")
+                strategy_summary = strategy_tracker.get_strategy_summary()
+                for strategy_name, stats in strategy_summary.items():
+                    print(f"  {strategy_name}: {stats['episodes_active']} episodes, "
+                          f"avg score: {stats['avg_score']}, "
+                          f"survival: {stats['survival_rate']:.1%}")
+                if strategy_tracker.transitions:
+                    print(f"  Total strategy transitions: {len(strategy_tracker.transitions)}")
+                print("--- End Analytics ---\n")
+
+        # Training completed - finalize progress bar
+        print("\n")  # New line after progress bar
+        training_end_time = time.time()
+        total_training_time = training_end_time - training_start_time
+        print(f"🎉 Training completed!")
+        print(f"📊 Episodes: {training_iterations}")
+        print(f"⏱️  Total time: {total_training_time/60:.1f} minutes")
+        print(f"⚡ Avg time per episode: {total_training_time/training_iterations:.2f}s")
+
+        # Show training results plot in pygame window
+        try:
+            final_score = episode_scores[-1] if episode_scores else 0
+            best_score = max(episode_scores) if episode_scores else 0
+            strategy_name = strategy_choice if 'strategy_choice' in locals() else 'Unknown Strategy'
+            
+            render_training_complete(
+                display, font, episode_rewards, average_rewards, 
+                final_score, best_score, strategy_name, total_training_time/60
+            )
+            
+            # Wait for user input to continue
+            waiting_for_input = True
+            while waiting_for_input:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        pygame.quit()
+                        sys.exit()
+                    elif event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+                        waiting_for_input = False
+                clock.tick(60)  # Limit frame rate while waiting
+            
+        except Exception as e:
+            print(f"Failed to display training plot in pygame: {e}")
 
         # Save final training plot to project
         if current_project:
@@ -542,6 +749,16 @@ while True:
                                 writer.writerows(training_log)
                                 print(f"Training data saved to {csv_filename}")
                     
+                    # Save strategy analytics
+                    analytics_filename = current_project.get_next_log_filename("strategy_analytics", extension="json")
+                    strategy_tracker.export_analytics(analytics_filename)
+                    print(f"Strategy analytics saved to {analytics_filename}")
+                    
+                    # Save final strategy configurations (in case they were modified)
+                    current_project.save_strategy_configs(training_framework)
+                    
+                    # Print strategy summary
+                    strategy_tracker.print_summary()
                     # Add training session to project history
                     session_duration = time.time() - training_start_time
                     current_project.add_training_session(

@@ -2,7 +2,6 @@ import random
 from enum import Enum
 from collections import namedtuple
 import numpy as np
-import sys
 
 # Constants
 BLOCK_SIZE = 20

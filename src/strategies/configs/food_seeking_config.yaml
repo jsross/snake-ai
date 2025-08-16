@@ -1,0 +1,21 @@
+# Food Seeking Strategy Configuration
+# Learn to move toward food while maintaining survival skills
+
+reward_weights:
+  wall_collision_penalty: -50.0     # Standard wall penalty
+  self_collision_penalty: -60.0     # Standard self-collision penalty
+  food_reward: 80.0                 # Moderate food emphasis
+  closer_reward: 1.0                # Active distance guidance toward food
+  farther_penalty: -0.2             # Penalty for moving away from food
+  survival_reward: 0.1              # Standard survival bonus
+  move_cost: -0.01                  # Standard move cost
+  no_score_penalty: -20.0           # Standard no score penalty
+
+# Strategy-specific parameters
+strategy_params:
+  exploration_multiplier: 1.1       # Slightly higher exploration
+  max_steps_multiplier: 1.0         # Standard episode length
+  activation_threshold:
+    min_episode: 2000               # Activate after 2000 episodes
+    min_survival_rate: 0.8          # Require 80% survival rate
+    max_avg_score: 3.0              # Deactivate when avg score >= 3.0

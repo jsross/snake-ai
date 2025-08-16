@@ -1,0 +1,19 @@
+# Snake AI Configuration
+# This file contains system settings for the Snake AI framework
+# Note: Reward weights are now defined in individual strategy config files
+
+# Game configuration controls game mechanics
+game_config:
+  base_max_steps: 400               # Shorter episodes initially to speed up learning
+  extra_steps_per_food: 150         # Reasonable extension per food eaten
+
+# Training configuration controls the learning process
+training_config:
+  epsilon_start: 1.0                # Starting exploration rate (100% random)
+  epsilon_end: 0.05                 # Slightly higher minimum for continued exploration
+  epsilon_decay_steps: 3000         # Faster decay to reach exploitation sooner
+  checkpoint_frequency: 500         # Episodes between model saves
+
+# UI configuration controls user interface behavior
+ui_config:
+  enable_live_plotting: false       # Whether to show real-time training plots

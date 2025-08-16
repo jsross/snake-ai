@@ -1,0 +1,17 @@
+# Survival Strategy Configuration
+# Pure survival focus - only avoiding walls and self-collision
+# No food rewards or distance guidance - just stay alive!
+
+reward_weights:
+  wall_collision_penalty: -0.1     # Penalty for hitting walls (reduced from -10.0)
+  self_collision_penalty: -0.15     # Penalty for hitting self (reduced from -12.0)  
+  survival_reward: 0.02              # Small reward for staying alive
+  # Note: no_score_penalty removed - no external penalties applied
+
+# Strategy-specific parameters
+strategy_params:
+  exploration_multiplier: 1.2       # 20% higher exploration for learning
+  max_steps_multiplier: 1.0         # Standard episode length
+  activation_threshold:
+    min_episode: 0                  # Always available as fallback
+    max_survival_rate: 0.8          # Deactivate when survival rate > 80%
