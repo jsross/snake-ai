@@ -69,12 +69,13 @@ class TrainingFramework:
         wall_collision: bool, 
         self_collision: bool, 
         ate_food: bool,
-        context: TrainingContext
+        context: TrainingContext,
+        game_instance=None
     ) -> Tuple[float, TrainingStrategy]:
         """Calculate reward using appropriate strategy"""
         strategy = self.get_active_strategy(context)
         reward = strategy.calculate_reward(
-            state, next_state, wall_collision, self_collision, ate_food, context
+            state, next_state, wall_collision, self_collision, ate_food, context, game_instance
         )
         return reward, strategy
         

@@ -41,7 +41,8 @@ class AdvancedTrainingStrategy(TrainingStrategy):
         wall_collision: bool, 
         self_collision: bool, 
         ate_food: bool,
-        context: TrainingContext
+        context: TrainingContext,
+        game_instance=None
     ) -> float:
         """Advanced reward calculation with enhanced food emphasis"""
         weights = self.get_reward_weights()
@@ -60,18 +61,22 @@ class AdvancedTrainingStrategy(TrainingStrategy):
         # Base reward
         reward = weights.get('survival_reward', 0.1) + weights.get('move_cost', -0.01)
         
-        # Enhanced distance-based guidance
-        head_pos = np.argwhere(state == 1)[0]
-        next_head_pos = np.argwhere(next_state == 1)[0]
-        food_pos = np.argwhere(state < 0)[0]
-        
-        prev_distance = np.linalg.norm(head_pos - food_pos)
-        new_distance = np.linalg.norm(next_head_pos - food_pos)
-        
-        if new_distance < prev_distance:
-            reward += weights.get('closer_reward', 0.75)
-        elif new_distance > prev_distance:
-            reward += weights.get('farther_penalty', -0.12)
+        # Enhanced distance-based guidance using features and game instance
+        if game_instance is not None and len(state) >= 5 and len(next_state) >= 5:
+            # Use the normalized food distance from features (more efficient)
+            prev_food_distance = state[4]  # normalized food distance
+            new_food_distance = next_state[4]
+            
+            if new_food_distance < prev_food_distance:
+                reward += weights.get('closer_reward', 0.75)
+            elif new_food_distance > prev_food_distance:
+                reward += weights.get('farther_penalty', -0.12)
+                
+            # Advanced bonus: reward staying in open areas (using available space features)
+            # Features 13-16 are space counts in each direction
+            if len(next_state) >= 17:
+                avg_space = sum(next_state[13:17]) / 4  # Average available space
+                reward += avg_space * weights.get('space_bonus', 0.1)
             
         return reward
         

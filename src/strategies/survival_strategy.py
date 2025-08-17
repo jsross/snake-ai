@@ -37,7 +37,8 @@ class SurvivalTrainingStrategy(TrainingStrategy):
         wall_collision: bool, 
         self_collision: bool, 
         ate_food: bool,
-        context: TrainingContext
+        context: TrainingContext,
+        game_instance=None
     ) -> float:
         """Pure survival-focused reward calculation"""
         

@@ -39,7 +39,8 @@ class FoodSeekingTrainingStrategy(TrainingStrategy):
         wall_collision: bool, 
         self_collision: bool, 
         ate_food: bool,
-        context: TrainingContext
+        context: TrainingContext,
+        game_instance=None
     ) -> float:
         """Reward calculation with distance-based guidance"""
         weights = self.get_reward_weights()
@@ -58,18 +59,34 @@ class FoodSeekingTrainingStrategy(TrainingStrategy):
         # Base reward
         reward = weights.get('survival_reward', 0.1) + weights.get('move_cost', -0.01)
         
-        # Add distance-based guidance
-        head_pos = np.argwhere(state == 1)[0]
-        next_head_pos = np.argwhere(next_state == 1)[0]
-        food_pos = np.argwhere(state < 0)[0]
-        
-        prev_distance = np.linalg.norm(head_pos - food_pos)
-        new_distance = np.linalg.norm(next_head_pos - food_pos)
-        
-        if new_distance < prev_distance:
-            reward += weights.get('closer_reward', 1.0)
-        elif new_distance > prev_distance:
-            reward += weights.get('farther_penalty', -0.2)
+        # Add distance-based guidance using game instance if available
+        if game_instance is not None:
+            # Get the full game state from the game instance
+            full_state = game_instance.get_state()
+            
+            # Find head positions before and after the move
+            # Note: next_state in features, but we can get it from game after the move
+            head_pos = np.argwhere(full_state == 1)
+            food_positions = np.argwhere(full_state < 0)
+            
+            if len(head_pos) > 0 and len(food_positions) > 0:
+                head_pos = head_pos[0]
+                
+                # Find closest food
+                distances = [abs(head_pos[0] - food[0]) + abs(head_pos[1] - food[1]) 
+                           for food in food_positions]
+                closest_distance = min(distances)
+                
+                # Use feature information for direction reward
+                # Features 2,3,4 are food_dir_x, food_dir_y, food_distance from our extraction
+                if len(state) >= 5 and len(next_state) >= 5:
+                    prev_food_distance = state[4]  # normalized food distance
+                    new_food_distance = next_state[4]
+                    
+                    if new_food_distance < prev_food_distance:
+                        reward += weights.get('closer_reward', 1.0)
+                    elif new_food_distance > prev_food_distance:
+                        reward += weights.get('farther_penalty', -0.2)
             
         return reward
         

@@ -82,9 +82,20 @@ class TrainingStrategy(ABC):
         wall_collision: bool, 
         self_collision: bool, 
         ate_food: bool,
-        context: TrainingContext
+        context: TrainingContext,
+        game_instance=None
     ) -> float:
-        """Calculate reward for this strategy"""
+        """Calculate reward for this strategy
+        
+        Args:
+            state: Feature vector representing current state
+            next_state: Feature vector representing next state
+            wall_collision: Whether a wall collision occurred
+            self_collision: Whether a self collision occurred
+            ate_food: Whether food was eaten
+            context: Training context with episode and stats info
+            game_instance: Optional game instance for accessing full game state
+        """
         pass
         
     @abstractmethod

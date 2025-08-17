@@ -63,7 +63,8 @@ pygame.display.set_caption('Snake AI')
 font = pygame.font.SysFont('arial', 25)
 clock = pygame.time.Clock()
 
-input_size = game.get_cell_count()
+# Use feature extraction instead of raw grid
+input_size = game.get_feature_count()
 output_size = 3
 
 ai_model = SnakeAI(input_size=input_size, output_size=output_size)
@@ -136,11 +137,11 @@ def create_training_context(episode, recent_stats):
     
     return context
 
-def calculate_reward(state, next_state, wall_collision, self_collision, ate_food, episode=0, recent_stats=None):
+def calculate_reward(state, next_state, wall_collision, self_collision, ate_food, episode=0, recent_stats=None, game_instance=None):
     """Calculate reward using the training framework"""
     context = create_training_context(episode, recent_stats)
     reward, active_strategy = training_framework.calculate_reward(
-        state, next_state, wall_collision, self_collision, ate_food, context
+        state, next_state, wall_collision, self_collision, ate_food, context, game_instance
     )
     
     # Store active strategy info for display
@@ -164,7 +165,7 @@ def run_episode(mode, epsilon, train=False, episode_num=0, recent_stats=None):
 
     while not done and steps < max_steps:
         if mode == "demo" or train:
-            action_idx = ai_model.get_action(state.flatten(), epsilon, device)
+            action_idx = ai_model.get_action(state, epsilon, device)  # state is already features
             action = Action(action_idx)
             debug_actions.append(action_idx)
             recent_actions.append(action_idx)
@@ -177,13 +178,13 @@ def run_episode(mode, epsilon, train=False, episode_num=0, recent_stats=None):
             action_idx = 0
 
         wall_collision, self_collision, ate_food = game.step(action)
-        next_state = game.get_state()
+        next_state = game.get_features()  # Use features instead of raw state
 
         done = wall_collision or self_collision
         
         max_steps = BASE_MAX_STEPS + game.score * EXTRA_STEPS_PER_FOOD
 
-        reward = calculate_reward(state, next_state, wall_collision, self_collision, ate_food, episode_num, recent_stats)
+        reward = calculate_reward(state, next_state, wall_collision, self_collision, ate_food, episode_num, recent_stats, game)
         
         # Anti-spinning penalty: penalize if too many turns in recent actions
         if mode == "training" and len(recent_actions) >= 6:
@@ -195,13 +196,13 @@ def run_episode(mode, epsilon, train=False, episode_num=0, recent_stats=None):
         total_reward += reward
 
         if mode == "training":
-            ai_model.remember(state.flatten(), action_idx, reward, next_state.flatten(), done)
+            ai_model.remember(state, action_idx, reward, next_state, done)  # Features are already 1D
 
-            # Train less frequently for more stable learning
-            if len(ai_model.memory) > 128 and steps % 4 == 0:  # Less frequent, larger memory buffer
+            # Train with larger batches for deeper network, but less frequently for stability
+            if len(ai_model.memory) > 256 and steps % 8 == 0:  # Wait for more experience, train less frequently
                 ai_model.train(device)
         else:
-            render(display, next_state, game.score, font)
+            render(display, game.get_state(), game.score, font)  # Render still needs the grid
             clock.tick(40)
 
         state = next_state
