@@ -1,0 +1,9 @@
+# Security scanning tools
+pip-audit>=2.6.0
+safety>=2.3.0
+pipdeptree>=2.9.0
+bandit>=1.7.0
+
+# Optional: More comprehensive security tools
+# semgrep>=1.0.0
+# cyclonedx-bom>=3.0.0

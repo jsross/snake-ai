@@ -47,7 +47,9 @@ class TrainingStrategy(ABC):
         
     def _load_config(self) -> Dict[str, Any]:
         """Load strategy-specific configuration"""
-        config_path = os.path.join(os.path.dirname(__file__), 'configs', self.config_name)
+        # Look in the project config/strategies directory
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        config_path = os.path.join(project_root, 'config', 'strategies', self.config_name)
         try:
             with open(config_path, 'r') as f:
                 return yaml.safe_load(f)

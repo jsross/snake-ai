@@ -35,11 +35,13 @@ game = SnakeGame(initial_snake_length=8)  # Start with a longer snake
 
 # Load configuration from YAML file
 def load_config():
-    """Load configuration from config.yaml file"""
-    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config.yaml')
+    """Load configuration from config/config.yaml file"""
+    # Path to config directory (project_root/config/config.yaml)
+    project_root = os.path.dirname(os.path.dirname(__file__))
+    config_path = os.path.join(project_root, 'config', 'config.yaml')
     
     if not os.path.exists(config_path):
-        raise FileNotFoundError(f"Configuration file not found at {config_path}. Please ensure config.yaml exists.")
+        raise FileNotFoundError(f"Configuration file not found at {config_path}. Please ensure config/config.yaml exists.")
     
     try:
         with open(config_path, 'r') as f:

@@ -9,24 +9,36 @@ This project implements a Snake game that utilizes artificial intelligence to ma
 - **Automatic Data Management**: Training plots, CSV logs, and model checkpoints are automatically saved and organized
 - **Roaming Data Storage**: Projects are stored in the user's roaming data directory for proper OS integration
 - **Export/Import**: Projects can be exported as ZIP archives for backup or sharing
+- **Security Scanning**: Automated dependency and security vulnerability scanning
 
 ## Project Structure
 
 ```
 snake-ai/
-├── src/
-│   ├── __main__.py           # Main application entry point
-│   ├── snake_game.py         # Core Snake game logic
-│   ├── snake_ai.py           # AI neural network and training logic
-│   ├── snake_game_renderer.py # Game visualization
-│   ├── menu.py               # Menu system
-│   ├── project_manager.py    # Project management system
-│   ├── model_container.py    # Unified model storage
-│   ├── utils.py              # Utility functions
-│   └── view_training_plot.py # Training visualization tools
-├── requirements.txt          # Project dependencies
-├── README.md                 # This documentation
-└── USER_DATA_GUIDE.md        # Guide to user data storage
+├── src/                      # Source code
+│   ├── snake_ai/            # Main package
+│   │   ├── core/            # Core game logic
+│   │   ├── strategies/      # AI strategies
+│   │   ├── training/        # Training framework
+│   │   └── utils/           # Utilities
+│   └── __main__.py          # Application entry point
+├── tests/                   # Test suite
+├── tools/                   # Development tools
+│   ├── security/           # Security scanning tools
+│   └── README.md           # Tools documentation
+├── docs/                   # Documentation
+├── config/                 # Configuration files
+│   ├── strategies/         # Strategy configurations
+│   └── security_scan.ini   # Security scan settings
+├── examples/               # Example code and strategies
+├── requirements/           # Requirements files
+│   ├── base.txt           # Core dependencies
+│   ├── dev.txt            # Development dependencies
+│   └── security.txt       # Security tools
+├── logs/                  # Log files (auto-generated)
+├── pyproject.toml         # Modern Python packaging
+├── requirements.txt       # Legacy requirements (for compatibility)
+└── README.md              # This documentation
 ```
 
 ## Project Data Structure
@@ -122,6 +134,60 @@ Projects are stored in your system's roaming data directory:
 - **Training Logs**: Detailed CSV logs with episode data, rewards, and statistics
 - **Progress Visualization**: Automatic generation of training progress plots
 - **Session History**: Each project tracks all training sessions with metadata
+
+## Security and Maintenance
+
+### Security Scanning
+
+The project includes automated security scanning tools:
+
+```bash
+# Quick security scan (dependencies only)
+python tools/security_tools.py --quick
+
+# Full security scan (includes static analysis)
+python tools/security_tools.py --full
+
+# Install security tools
+python tools/security_tools.py --install
+```
+
+Security scans check for:
+- Known vulnerabilities in dependencies
+- Outdated packages with security updates
+- Static code security issues
+- Dependency tree analysis
+
+Results are saved to `logs/security_scan_*.txt` for review.
+
+### Installation Options
+
+#### Standard Installation
+```bash
+# Core dependencies only
+pip install -r requirements/base.txt
+
+# Development dependencies
+pip install -r requirements/dev.txt
+
+# Security tools
+pip install -r requirements/security.txt
+```
+
+#### Modern Installation (Recommended)
+```bash
+# Core installation
+pip install -e .
+
+# With development tools
+pip install -e ".[dev]"
+
+# With security tools
+pip install -e ".[security]"
+
+# Everything
+pip install -e ".[dev,security,docs]"
+```
 
 ## Export and Backup
 

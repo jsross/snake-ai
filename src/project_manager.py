@@ -30,8 +30,8 @@ except ImportError:
 
 
 def load_config():
-    """Load configuration from config.yaml file"""
-    config_path = Path(__file__).parent.parent / 'config.yaml'
+    """Load configuration from config/config.yaml file"""
+    config_path = Path(__file__).parent.parent / 'config' / 'config.yaml'
     
     # Default configuration (fallback if file doesn't exist)
     default_config = {
@@ -220,8 +220,8 @@ class SnakeAIProject:
         try:
             import shutil
             
-            # Copy strategy config files to project
-            source_configs_dir = Path(__file__).parent / "strategies" / "configs"
+            # Copy strategy config files to project from the project config directory
+            source_configs_dir = Path(__file__).parent.parent / "config" / "strategies"
             
             if source_configs_dir.exists():
                 # Clear existing strategy configs

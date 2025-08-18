@@ -184,3 +184,11 @@ desktop.ini
 # Custom project specific
 # Uncomment if you want to track specific model files
 # !models/final_model.pth
+
+# Project logs and generated files
+logs/
+security_scan_*.txt
+bandit_report.*
+
+# Removed files backup (development only)
+removed_files_backup/

@@ -1,0 +1,22 @@
+# Exploration Strategy Configuration
+# Emphasize exploration and diverse movement patterns
+
+reward_weights:
+  wall_collision_penalty: -50.0     # Standard wall penalty
+  self_collision_penalty: -60.0     # Standard self-collision penalty
+  food_reward: 120.0                # Slight bonus for food (1.2x)
+  closer_reward: 0.3                # Reduced guidance to encourage exploration
+  farther_penalty: -0.05            # Minimal penalty for exploration
+  survival_reward: 0.1              # Standard survival bonus
+  move_cost: -0.01                  # Standard move cost
+  no_score_penalty: -20.0           # Standard no score penalty
+  exploration_bonus: 0.1            # Bonus for reaching edges
+
+# Strategy-specific parameters
+strategy_params:
+  exploration_multiplier: 1.5       # 50% higher exploration
+  max_steps_multiplier: 1.1         # Slightly longer episodes for exploration
+  edge_distance_threshold: 2        # Distance to edge for exploration bonus
+  activation_threshold:
+    min_episode: 1000               # Activate at episode 1000
+    max_episode: 3000               # Deactivate at episode 3000
