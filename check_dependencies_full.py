@@ -50,16 +50,25 @@ def main():
     if os.path.exists(pip_audit_exe):
         success, stdout, stderr = run_command(f'"{pip_audit_exe}" --desc', "🔒 SECURITY VULNERABILITIES")
         
-        # Quick result summary
-        if "Found 0 known vulnerabilities" in stdout:
+        # Quick result summary - check both stdout and stderr for vulnerability messages
+        full_output = stdout + stderr
+        if "Found 0 known vulnerabilities" in full_output or "No known vulnerabilities found" in full_output:
             print("✅ NO SECURITY ISSUES FOUND")
-        elif "Found 1 known vulnerability" in stdout:
-            if "torch" in stdout and "ctc_loss" in stdout:
+        elif "Found 1 known vulnerability" in full_output:
+            if "torch" in full_output and "ctc_loss" in full_output:
                 print("⚠️  1 PyTorch vulnerability (ctc_loss - SAFE for your Snake AI)")
             else:
                 print("⚠️  1 SECURITY VULNERABILITY - Review details above")
+        elif "vulnerabilities" in full_output.lower() and ("found" in full_output.lower() or "known" in full_output.lower()):
+            # Extract number of vulnerabilities if possible
+            import re
+            vuln_match = re.search(r'Found (\d+) known vulnerabilities', full_output)
+            if vuln_match and int(vuln_match.group(1)) > 1:
+                print(f"🚨 {vuln_match.group(1)} VULNERABILITIES FOUND - Review details above")
+            else:
+                print("🚨 MULTIPLE VULNERABILITIES FOUND - Review details above")
         else:
-            print("🚨 MULTIPLE VULNERABILITIES FOUND - Review details above")
+            print("✅ NO SECURITY ISSUES FOUND")
     else:
         print("⚠️  pip-audit not found. Installing...")
         run_command(f'"{pip_exe}" install pip-audit', "Installing pip-audit")
